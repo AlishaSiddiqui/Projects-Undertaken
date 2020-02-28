@@ -1,0 +1,114 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+#read training data set
+library(readr)
+data_training <- read_csv('C:/Users/asidd/Documents/MSIS 2506/R final Project/usa-housing-dataset/housing_train.csv')
+View(data_training)
+```
+
+```{r}
+data_subset <- data_training[c(13,18,47,81)]
+data_filter<-filter(data_subset, data_subset$Neighborhood == "Veenker" & data_subset$OverallQual <= '6' & data_subset$GrLivArea <='1262' )
+View(data_filter)
+
+input_neighborhood <- data_subset$Neighborhood
+input_OverallQual <- data_subset$OverallQual
+input_GrLivArea <- data_subset$GrLivArea
+input_SalePrice <- data_subset$SalePrice
+
+View(data_subset)
+```
+
+```{r}
+library('ggplot2')
+library('ggthemes') 
+library('scales')
+library('dplyr') 
+library('data.table')
+library('gridExtra')
+library('corrplot') 
+library('GGally')
+```
+
+```{r}
+# the sale prices are right skewed. This was expected as few people can afford very expensive houses
+n1 <- ggplot(data_filter[!is.na(data_filter$SalePrice),], aes(x=Neighborhood, y=SalePrice)) +
+        geom_bar(stat='summary', fun.y = "median", fill='blue') +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+        scale_y_continuous(breaks= seq(0, 800000, by=50000), labels = comma) +
+        geom_label(stat = "count", aes(label = ..count.., y = ..count..), size=3) +
+        geom_hline(yintercept=163000, linetype="dashed", color = "red")
+
+n2 <- ggplot(data=data_filter, aes(x=Neighborhood)) +
+        geom_histogram(stat='count')+
+        geom_label(stat = "count", aes(label = ..count.., y = ..count..), size=3)+
+        theme(axis.text.x = element_text(angle = 45, hjust = 1))
+grid.arrange(n1, n2)
+```
+
+```{r}
+
+```
+
+```{r}
+cat_var <- names(data_training)[which(sapply(data_training, is.character))]
+cat_car <- c(cat_var, 'BedroomAbvGr', 'HalfBath', ' KitchenAbvGr','BsmtFullBath', 'BsmtHalfBath', 'MSSubClass')
+numeric_var <- names(data_training)[which(sapply(data_training, is.numeric))]
+```
+
+```{r}
+## Creating one training dataset with categorical variable and one with numeric variable. We will use this for data visualization.
+
+train1_cat<-data_training[cat_var]
+train1_num<-data_training[numeric_var]
+```
+
+```{r}
+## Bar plot/Density plot function
+ggplot(data_training, aes(x = LotFrontage, y = LotArea)) +
+  geom_boxplot() +
+  geom_hline(aes(yintercept=80), 
+             colour='red', linetype='dashed', lwd=2) +
+  scale_y_continuous(labels=dollar_format()) +
+  theme_few()
+```
+
+```{r}
+plotHist <- function(data_in, i) 
+{
+  data <- data.frame(x=data_in[[i]])
+  p <- ggplot(data=data, aes(x=factor(x))) + stat_count() + xlab(colnames(data_in)[i]) + theme_light() + 
+    theme(axis.text.x = element_text(angle = 90, hjust =1))
+  return (p)
+}
+plotDen <- function(data_in, i){
+  data <- data.frame(x=data_in[[i]], SalePrice = data_in$SalePrice)
+  p <- ggplot(data= data) + geom_line(aes(x = x), stat = 'density', size = 1,alpha = 1.0) +
+    xlab(paste0((colnames(data_in)[i]), '\n', 'Skewness: ',round(skewness(data_in[[i]], na.rm = TRUE), 2))) + theme_light() 
+  return(p)
+  
+}
+doPlots <- function(data_in, fun, ii, ncol=3) 
+{
+  pp <- list()
+  for (i in ii) {
+    p <- fun(data_in=data_in, i=i)
+    pp <- c(pp, list(p))
+  }
+  do.call("grid.arrange", c(pp, ncol=ncol))
+}
+doPlots(train1_cat, fun = plotHist, ii = 13:18, ncol = 2)
+```
+
+```{r}
+#The histograms below show that majority of the houses have 2 full baths, 0 half baths, and have an average of 3 bedrooms.
+correlations <- cor(na.omit(train1_num[,-1]))
+row_indic <- apply(correlations, 1, function(x) sum(x > 0.3 | x < -0.3) > 1)
+correlations<- correlations[row_indic ,row_indic ]
+corrplot(correlations, method="square")
+```
+

@@ -1,0 +1,120 @@
+---
+title: "MSIS 2506 - Project 4"
+author: "Denis Wu"
+date: "12/02/19"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  word_document: default
+---
+The purpose of this R notebook is to determine which features in our dataset are statistically significant and therefore to be kept for KNN machine learning purpose. We will use lm() to find those features.
+
+
+Import the data, turning strings into Factors
+```{r}
+library(randomForest)
+housing <- read.csv('C:/Users/asidd/Documents/MSIS 2506/housing_train.csv')
+```
+
+Look at the data to have sense of the dataset.
+```{r}
+head(housing)
+```
+
+Remove Id column (cannot have identifying features for ML)
+```{r}
+housing <- housing[,-1]
+housing
+```
+
+Check for unique factors/values of 3 or less to be removed from features of interest
+```{r}
+uniques <- rapply(housing,function(x)length(unique(x)))
+uniques
+```
+
+Remove features with 3 or less factors/unique values
+```{r}
+housing2 <- subset(housing, select=-c(Street,Alley,Utilities,LandSlope,CentralAir,BsmtHalfBath,HalfBath,PavedDrive))
+housing2
+```
+
+Identify excessive NA features
+```{r}
+apply(housing, 2, function(col)sum(is.na(col))/length(col))
+```
+
+Remove features with large NA %
+```{r}
+housing2 <- subset(housing, select=-c(LotFrontage,Alley,FireplaceQu,PoolQC, Fence,MiscFeature))
+housing2
+```
+
+Remove oberservations with NAs
+```{r}
+housing3 <- na.omit(housing2)
+housing3
+```
+
+Collect vector of header names for lm purpose
+```{r}
+features <- names(housing3)
+features
+```
+
+Remove SalePrice for lm purpose
+```{r}
+features <- features[-length(features)]
+features
+```
+
+Run lm to find statistically significant features
+```{r}
+outcome <- "SalePrice"
+
+f <- as.formula(
+  paste(outcome, 
+        paste(features, collapse = " + "), 
+        sep = " ~ "))
+f
+options(max.print=100000000)
+model <- lm(f, data = housing3)
+summary(model)
+```
+
+Rerun lm with features with statisitical significance (>0.05)
+```{r}
+model <- lm(SalePrice ~ MSZoning + LotArea + Street + LotConfig + LandSlope + Neighborhood + Condition1 + Condition2 + HouseStyle + OverallQual + OverallCond + YearBuilt + RoofStyle + RoofMatl + Exterior2nd + MasVnrArea + ExterQual + BsmtExposure + BsmtFinType1 + BsmtFinSF1 + BsmtFinType2 + BsmtFinSF2 + BsmtUnfSF + X1stFlrSF + X2ndFlrSF + BedroomAbvGr + KitchenAbvGr + KitchenQual + GarageArea + GarageQual + WoodDeckSF + ScreenPorch + PoolArea, data = housing3)
+summary(model)
+```
+
+Repeat
+```{r}
+model <- lm(SalePrice ~ MSZoning + LotArea + Street + LotConfig + LandSlope + Neighborhood + Condition1 + Condition2 + HouseStyle + OverallQual + OverallCond + YearBuilt + RoofStyle + RoofMatl + MasVnrArea + ExterQual + BsmtExposure + BsmtFinType1 + BsmtFinSF1 + BsmtFinType2 + BsmtFinSF2 + BsmtUnfSF + X1stFlrSF + X2ndFlrSF + KitchenAbvGr + KitchenQual + GarageArea + GarageQual + PoolArea, data = housing3)
+summary(model)
+```
+
+The remaining features seem fairly signficant:
+
+MSZoning + LotArea + Street + LotConfig + LandSlope + Neighborhood + Condition1 + Condition2 + HouseStyle + OverallQual + OverallCond + YearBuilt + RoofStyle + RoofMatl + MasVnrArea + ExterQual + BsmtExposure + BsmtFinType1 + BsmtFinSF1 + BsmtFinType2 + BsmtFinSF2 + BsmtUnfSF + X1stFlrSF + X2ndFlrSF + KitchenAbvGr + KitchenQual + GarageArea + GarageQual + PoolArea
+
+
+We will determine which features are the most important according to randomForest
+```{r fig.height=10}
+library(randomForest)
+house_model <- randomForest(SalePrice~.,
+                            data = housing3)
+varImpPlot(house_model)
+```
+
+Crossmatching the lm and randomForest results, we will use OverallQall, Neighborhood, ExterQual, X1stFlrSF, X2ndFlrSF.
+
+
+
+
+
+
+
+
+
