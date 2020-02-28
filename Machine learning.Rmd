@@ -1,0 +1,87 @@
+---
+name: Alisha Siddiqui
+output:
+  html_document:
+    df_print: paged
+---
+**Machine learning model for breast cancer data**
+
+Installing the required libraries for Machine Learning 
+```{r}
+library(caret)
+library(tidyverse)
+library(ggplot2)
+library(psych)
+library(mice)
+library(GGally)
+library(rpart)
+library(randomForest)
+```
+## Load the data 
+```{r}
+breastCancerData <- read.csv(filename <- "breast-cancer.csv")
+```
+Remove ID column Values
+```{r}
+breastCancerData$ID<-NULL
+```
+Check for missing data
+```{r}
+library(Amelia)
+missmap(breastCancerData)
+```
+Fetching the summary of data
+```{r}
+summary(breastCancerData)
+```
+Looking at the data, we can see that the diagnosis column which tells us about the bening and malignant is the most important feature. we need to convert this feature to a factor.
+```{r}
+prop.table(table(breastCancerData$diagnosis))
+breastCancerData$diagnosis <- factor(breastCancerData$diagnosis, levels = c("B", "M"), labels = c("Benign", "Malignant"))
+```
+**Data Visualization**
+Creating a histogram to view the radius mean
+```{r}
+  hist(breastCancerData$radius_mean)
+```
+**Dataset Validation**
+Training and testing is performed on two different datasets from the same file
+```{r}
+#split data into training and test data sets
+index_data <- createDataPartition(y = breastCancerData$diagnosis,p = 0.75,list = FALSE)
+training_data <- breastCancerData[index_data,]
+testing_data <- breastCancerData[-index_data,]
+```
+Checking dimensions of dataset
+```{r}
+#Check dimensions of the split
+prop.table(table(breastCancerData$diagnosis)) * 100
+prop.table(table(training_data$diagnosis)) * 100
+prop.table(table(testing_data$diagnosis)) * 100
+```
+For comparing the outcome of the training and testing phase let’s create separate variables that store the value of the response variable:
+```{r}
+#create objects x which holds the predictor variables and y which holds the response variables
+x = training_data[,-9]
+y = training_data$diagnosis
+```
+**Generating Naive Bayes Model using training data**
+```{r}
+#load library 
+library(e1071)
+#create model
+model = train(x,y,'nb',trControl=trainControl(method='cv',number=10))
+model
+```
+We can conclude that our model is 97% accurate.
+
+**Model Prediction and Evaluation**
+Perform prediction on the model created above
+```{r}
+#Predict testing set
+Predict <- predict(model,newdata = testing_data )
+#Get the confusion matrix to see accuracy value and other parameter values
+ 
+confusionMatrix(Predict, testing_data$diagnosis)
+```
+We conclude that our prediction model is 97% accurate. The positive class is Benign.
