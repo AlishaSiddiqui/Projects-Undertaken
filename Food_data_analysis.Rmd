@@ -1,0 +1,171 @@
+---
+Submission: 'MSIS 2506: R Project 3, Fall 2019'
+title: Food Recipe Data Analysis
+author: "Alisha Siddiqui"
+date: "12/2/2019"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+# **Introduction**
+Food is an essential component of our individual and social life. In this
+direction, food-oriented blogs and websites have blossomed. The data is being contributed by foodies, gourmets and cooks. The analysis of this usercontributed data provides interesting insight in understanding cuisines habits and cultures.
+
+The objective of this project is to analyze food recipe data. This data is available at food.com. I intent to cover the below in this project scope:-
+1. The average time of preparation of recipes.
+2. Over what period was data collected and reviewed.
+3. How are the variables correlated to each other.
+
+This is going to help determine what are the factors that lead to successful/unsuccessful recipes. Looking at the above inferences, a blogger would know what is the average preparation time for recipes, how long does it take to be reviewed after submission and how are reviews correlated to year of submission. 
+
+![](https://img.sndimg.com/food/image/upload/fl_progressive,c_fill,q_80,w_598,h_250/v1/img/recipes/52/97/35/U6RTN1NqT1GVHQWNZa0E_Obsessions%203-0602.jpg)
+
+# **Data Preparation**
+
+## The data was scraped from Food.com
+###Acknowledgement:
+####Dataset has been downloaded from https://www.kaggle.com/shuyangli94/food-com-recipes-and-user-interactions
+##### The dataset contains recipes and interactions. This dataset consists of 180K+ recipes and 700K+ recipe reviews covering 18 years of user interactions and uploads on Food.com.
+#####The data has been categorized in two different categories:-
+1. Interaction data
+2. Raw recipe/User data
+
+```{r message = FALSE, warning = FALSE}
+#Loading the necessary packages and libraries
+library(tidyverse)
+library(lubridate)
+library(extrafont)
+library(scales)
+library(ggridges)
+library(corrplot)
+library(Hmisc)
+library(reshape2)
+
+#Reading datasets
+recipes_data <- read_csv("~/desktop/alisha/RAW_recipes.csv")
+reviews_data <- read_csv("~/desktop/alisha/RAW_interactions.csv")
+
+#combining recipe and review data files 
+combine_food <- inner_join(recipes_data, reviews_data, by = c("id" = "recipe_id"))
+
+#Displaying the structure of final file
+str(combine_food)
+head(combine_food, 10)
+```
+
+There are 1,132,367 rows and 16 variables.  11 variables relate to the recipes and the last 4 variables relate to the user interactions.  id and recipe_id are the keys.  Each row represents an interaction for a given recipe.
+
+## Check for Missing Values
+Checking missing values by column.
+```{r message = FALSE, warning = FALSE}
+colSums(is.na(combine_food))
+```
+Two columns have NAs- Description and interactions.
+
+##Getting the summary of Data
+```{r}
+#view(combine_food)
+```
+
+## Feature Engineering
+
+Extracting below important features for analysis:
+1.Time components(month and year data from when the recipe was submitted and when it was reviewed )
+2.Nutrional value(amount of calories,fat,sugar,protein,saturated fat,carbs)
+
+### Time Components
+```{r message = FALSE, warning = FALSE}
+
+time_component <- combine_food %>% 
+  mutate(submission_month = month(submitted, label = TRUE), submission_year = year(submitted), review_month = month(date, label = TRUE), review_year = year(date)) %>%
+  select(-c(submitted, date))
+
+time_component %>% 
+  select(name, submission_month, submission_year, review_month, review_year) %>%
+  head(10)
+
+```
+
+### Nutritional Values
+Each value in the nutrition column is a vector of size 7. We use separate() to extract these elements into their own columns. mutate() adds new variables while prsrving the old ones.
+```{r message = FALSE, warning = FALSE}
+
+nutritional_value <- time_component %>%
+  mutate(nutrition = str_replace_all(nutrition, "\\[|\\]", "")) %>%
+  separate(nutrition, into = c("calories", "total_fat", "sugar", "sodium", "protein", "sat_fat", "carbs"), sep = ",")
+
+nutritional_value %>%
+  select(name, calories, total_fat, sugar, sodium, protein, sat_fat, carbs) %>%
+  distinct() %>%
+  head(10)
+```
+
+# **Exploratory Data Analysis**
+Checking data for some strangely high values that are skewing the data.
+```{r message = FALSE, warning = FALSE}
+nutritional_value %>%
+  select(id, name, minutes) %>%
+  distinct() %>%
+  arrange(desc(minutes)) %>%
+  head(25)
+```
+Value for top row is really high and therefore erroneous so we will filter this out. 
+###Average Recipe making time
+This tells us that what is average amount of time for preparation of recipe that is being submitted on the portal. Putting the graph on logarthmic scale because of the exceptionally high values.
+```{r message = FALSE, warning = FALSE}
+nutritional_value %>%
+  select(id, name, minutes) %>%
+  filter(minutes < 2000000) %>%
+  distinct() %>%
+  ggplot(aes(minutes)) +
+  geom_density(fill = "yellow") +
+  geom_vline(xintercept = median(nutritional_value$minutes)) +
+  scale_x_log10() +
+  xlab("Making Time (mins)") +
+  ylab(NULL) +
+  theme(axis.text.y = element_blank()) +
+  ggtitle("Distribution of Recipe Making Time")
+
+paste0("Median Recipe Making Time: ", median(nutritional_value$minutes), " Minutes")
+
+```
+
+### Data collection and review
+When was data collected and reviewed ? How much did it take for getting a review on a submission.
+```{r message = FALSE, warning = FALSE}
+
+submission_months <- nutritional_value %>%
+  select(submission_month, id) %>%
+  distinct()
+review_months <- nutritional_value %>%
+  select(review_month)
+
+ggplot() +
+  geom_bar(data = review_months, aes(review_month), fill = "pink") +
+  geom_bar(data = submission_months, aes(submission_month), fill = "blue") +
+  xlab("Month") +
+  ylab("Count") +
+  ggtitle("Distribution of Recipe Submission and Review Years", subtitle = "Blue bars represent submission, pink bars represent reviews")
+```
+January is the month in which majority of submissions were made and reviews were received. For the rest of the months, it is mostly the same amount of submissions and reviews. This data pointing towards January as a good month for submissions.
+
+## Correlation Plot
+Visualizing the relationship between time components and nutritional values
+
+```{r message = FALSE, warning = FALSE}
+
+correlation_values <- nutritional_value %>%
+  select(minutes, 6:13, n_ingredients, rating, submission_year, review_year) %>%
+  na.omit() 
+
+corrmatrix <- rcorr(as.matrix(correlation_values))
+
+corrplot(corrmatrix$r, type = "upper", order = "hclust", tl.col = "orchid3", tl.srt = 45)
+
+corrmatrix$r
+
+```
+
+We can conclude that calorie is strongly related to other nutritional variables.
+As the ingredients increase, the number of steps increase. Reviews and ratings have a negative relationaship which shows that as time passes, there is an increase in negative reviews.Submission year is directly related to review year.
